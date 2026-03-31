@@ -5,158 +5,157 @@ class Agent:
     def __init__(self):
         self.setup_tools()
         self.messages = [
-            {"role": "system", "content": "Eres un asistente útil que habla español y eres muy conciso con tus respuestas"}
+            {
+                "role": "system",
+                "content": "Eres un asistente útil que habla español y eres muy conciso con tus respuestas"
+            }
         ]
-    
+
     def setup_tools(self):
+        # Formato estándar de chat.completions (compatible con todos los proveedores)
         self.tools = [
             {
                 "type": "function",
-                "name": "list_files_in_dir",
-                "description": "Lista los archivos que existen en un directorio dado (por defecto es el directorio actual)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "directory": {
-                            "type": "string",
-                            "description": "Directorio para listar (opcional). Por defecto es el directorio actual"
-                        }
-                    },
-                    "required": []
+                "function": {
+                    "name": "list_files_in_dir",
+                    "description": "Lista los archivos que existen en un directorio dado",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "directory": {
+                                "type": "string",
+                                "description": "Directorio a listar. Por defecto el directorio actual"
+                            }
+                        },
+                        "required": []
+                    }
                 }
             },
             {
                 "type": "function",
-                "name": "read_file",
-                "description": "Lee el contenido de un archivo en una ruta especificada",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "La ruta del archivo a leer"
-                        }
-                    },
-                    "required": ["path"]
+                "function": {
+                    "name": "read_file",
+                    "description": "Lee el contenido de un archivo en la ruta especificada",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "Ruta del archivo a leer"
+                            }
+                        },
+                        "required": ["path"]
+                    }
                 }
             },
             {
                 "type": "function",
-                "name": "edit_file",
-                "description": "Edita el contenido de un archivo reemplazando prev_text por new_text. Crea el archivo si no existe.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "La ruta del archivo a editar"
+                "function": {
+                    "name": "edit_file",
+                    "description": "Edita o crea un archivo. Reemplaza prev_text por new_text, o crea uno nuevo.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "Ruta del archivo"
+                            },
+                            "prev_text": {
+                                "type": "string",
+                                "description": "Texto a reemplazar (vacío si es archivo nuevo)"
+                            },
+                            "new_text": {
+                                "type": "string",
+                                "description": "Texto nuevo"
+                            }
                         },
-                        "prev_text": {
-                            "type": "string",
-                            "description": "El texto que se va a buscar para reemplazar (puede ser vacío para archivos nuevos)"
-                        },
-                        "new_text": {
-                            "type": "string",
-                            "description": "El texto que reemplazará a prev_text (o el texto para un archivo nuevo)"
-                        }
-                    },
-                    "required": ["path", "new_text"]
+                        "required": ["path", "new_text"]
+                    }
                 }
             }
         ]
-        
-    #Definición de herramientas
+
+    """
+    HERRAMIENTAS DEL AGENTE
+    Son las herramientas que tiene el agente para realizar la tarea del usuario
+    """    
+    #Permite listar todos los archivos del directorio actual
+    #Problema: Dar permiso de leer todo el sistema a Gemini = Google, puede ser demasiado
     def list_files_in_dir(self, directory="."):
-        print("  ⚙️ Herramienta llamada: list_files_in_dir")
+        print("  ⚙️  Herramienta: list_files_in_dir")
         try:
-            files = os.listdir(directory)
-            
-            #Asi lo deje en el video. En realidad allá se agrega a un
-            #diccionario entonces no es necesario hacerlo aquí
-            return {"files": files}
+            return {"files": os.listdir(directory)}
         except Exception as e:
             return {"error": str(e)}
-        
-    #Herramienta: Leer archivos
+
+    #Permite leer cualquier archivo en base a una dirección
     def read_file(self, path):
-        print("  ⚙️ Herramienta llamada: read_file")
+        print("  ⚙️  Herramienta: read_file")
         try:
             with open(path, encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
-            err = f"Error al leer el archivo {path}"
-            print(err)
-            return err
-        
-    #Herramienta: Editar archivos
-    def edit_file(self, path, prev_text, new_text):
-        print("  ⚙️ Herramienta llamada: edit_file")
+            return f"Error al leer {path}: {e}"
+
+    #Permite editar un archivo
+    def edit_file(self, path, new_text, prev_text=""):
+        print("  ⚙️  Herramienta: edit_file")
         try:
             existed = os.path.exists(path)
             if existed and prev_text:
-                content = self.read_file(path)
-                
+                with open(path, encoding="utf-8") as f:
+                    content = f.read()
                 if prev_text not in content:
-                    return f"Texto {prev_text} no encontrado en el archivo"
-                
+                    return f"Texto '{prev_text}' no encontrado en {path}"
                 content = content.replace(prev_text, new_text)
-                
             else:
-                #Crear o sobreescribir con el nuevo texto directamente
                 dir_name = os.path.dirname(path)
                 if dir_name:
                     os.makedirs(dir_name, exist_ok=True)
-                
                 content = new_text
-                
+
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
-                
-            action = "editado" if existed and prev_text else "creado"
-            return f"Archivo {path} {action} exitosamente"
+
+            accion = "editado" if existed and prev_text else "creado"
+            return f"Archivo {path} {accion} correctamente"
         except Exception as e:
-            err = f"Error al crear o editar el archivo {path}"
-            print(err)
-            return err
-        
+            return f"Error al editar {path}: {e}"
+
     def process_response(self, response):
-        #True = si llama a una funcion. False = No hubo llamado.
-        
-        #Almacenar para historial
-        self.messages += response.output
-        
-        for output in response.output:
-            if output.type == "function_call":
-                fn_name = output.name
-                args = json.loads(output.arguments)
-                
-                print(f"  - El modelo considera llamar a la herramienta {fn_name}")
-                print(f"  - Argumentos: {args}")
-                
+        message = response.choices[0].message
+
+        # Guardar el turno del asistente en el historial
+        self.messages.append(message)
+
+        if message.tool_calls:
+            for tool_call in message.tool_calls:
+                fn_name = tool_call.function.name
+                args = json.loads(tool_call.function.arguments)
+
+                print(f"  → Llamando a '{fn_name}' con args: {args}")
+
                 if fn_name == "list_files_in_dir":
                     result = self.list_files_in_dir(**args)
                 elif fn_name == "read_file":
                     result = self.read_file(**args)
                 elif fn_name == "edit_file":
                     result = self.edit_file(**args)
-                    
-                #Agregar a la memoria la respuesta del llamado
+                else:
+                    result = f"Herramienta '{fn_name}' no reconocida"
+
+                # Añadir resultado al historial como mensaje de herramienta
                 self.messages.append({
-                    "type": "function_call_output",
-                    "call_id": output.call_id,
-                    "output": json.dumps({
-                        #Así lo dejé en el video. Creo que queda mejor
-                        #dejarlo como 'result', al aplicar ahora a las
-                        #3 herramientas
-                        "files": result
-                    })
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps({"result": result}, ensure_ascii=False)
                 })
-                    
-                return True
-                
-            elif output.type == "message":
-                #print(f"Asistente: {output.content}")
-                reply = "\n".join(part.text for part in output.content)
-                print(f"Asistente: {reply}")
-                
-        return False
+
+            return True  # Hubo tool calls, continúa el bucle
+
+        else:
+            # Respuesta final de texto
+            reply = message.content or ""
+            print(f"\nAsistente: {reply}\n")
+            return False  # No hay más tool calls
+
